@@ -16,12 +16,12 @@ plugins {
 
 android {
     namespace = "com.omidshojaee.repeatalarm"
-    compileSdk = 35
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.omidshojaee.repeatalarm"
         minSdk = 24
-        targetSdk = 35
+        targetSdk = 37
         versionCode = 3
         versionName = "1.0.2"
 
