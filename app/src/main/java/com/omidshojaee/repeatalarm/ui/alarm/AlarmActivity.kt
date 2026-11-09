@@ -1,12 +1,9 @@
 package com.omidshojaee.repeatalarm.ui.alarm
 
 import android.content.Context
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
-import android.os.CombinedVibration
-import android.os.VibrationEffect
-import android.os.Vibrator
-import android.os.VibratorManager
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -53,7 +50,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.omidshojaee.repeatalarm.R
 import com.omidshojaee.repeatalarm.notification.NotificationHelper
-import com.omidshojaee.repeatalarm.sound.AlarmSoundPlayer
+import com.omidshojaee.repeatalarm.scheduler.AlarmSchedulerImpl
+import com.omidshojaee.repeatalarm.service.AlarmPlaybackService
 import com.omidshojaee.repeatalarm.ui.theme.RepeatAlarmTheme
 import com.omidshojaee.repeatalarm.util.toPersianDigits
 import android.content.res.Configuration
@@ -62,9 +60,6 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 class AlarmActivity : ComponentActivity() {
-
-    private lateinit var alarmSoundPlayer: AlarmSoundPlayer
-    private var vibrator: Vibrator? = null
 
     override fun attachBaseContext(newBase: Context) {
         val locale = Locale("fa")
@@ -87,8 +82,6 @@ class AlarmActivity : ComponentActivity() {
         @Suppress("DEPRECATION")
         resources.updateConfiguration(config, resources.displayMetrics)
 
-        alarmSoundPlayer = AlarmSoundPlayer(this)
-
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
@@ -103,11 +96,6 @@ class AlarmActivity : ComponentActivity() {
 
         val alarmId = intent.getLongExtra(EXTRA_ALARM_ID, -1L)
         val alarmTitle = intent.getStringExtra(EXTRA_ALARM_TITLE) ?: ""
-        val soundUriString = intent.getStringExtra(EXTRA_SOUND_URI)
-        val shouldVibrate = intent.getBooleanExtra(EXTRA_VIBRATE, true)
-
-        startAlarmSoundAndVibration(soundUriString, shouldVibrate)
-
         enableEdgeToEdge()
         setContent {
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
@@ -127,58 +115,17 @@ class AlarmActivity : ComponentActivity() {
         }
     }
 
-    private fun startAlarmSoundAndVibration(soundUriString: String?, shouldVibrate: Boolean) {
-        alarmSoundPlayer.play(soundUriString, enableVolumeRamp = true)
-
-        if (shouldVibrate) {
-            try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    val vibratorManager = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
-                    val pattern = VibrationEffect.createWaveform(longArrayOf(0, 500, 500, 500), 0)
-                    vibratorManager.vibrate(CombinedVibration.createParallel(pattern))
-                } else {
-                    @Suppress("DEPRECATION")
-                    vibrator = getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
-                    val pattern = VibrationEffect.createWaveform(longArrayOf(0, 500, 500, 500), 0)
-                    vibrator?.vibrate(pattern)
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
-    }
-
-    private fun stopSoundAndVibration() {
-        alarmSoundPlayer.stop()
-
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                val vibratorManager = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
-                vibratorManager.cancel()
-            } else {
-                @Suppress("DEPRECATION")
-                vibrator?.cancel()
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
-
     private fun dismissAlarm(alarmId: Long) {
-        stopSoundAndVibration()
+        stopService(Intent(this, AlarmPlaybackService::class.java))
         NotificationHelper.cancelNotification(this, alarmId)
         finish()
     }
 
     private fun snoozeAlarm(alarmId: Long) {
-        stopSoundAndVibration()
+        AlarmSchedulerImpl(this).scheduleSnooze(alarmId)
+        stopService(Intent(this, AlarmPlaybackService::class.java))
         NotificationHelper.cancelNotification(this, alarmId)
         finish()
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        stopSoundAndVibration()
     }
 
     companion object {

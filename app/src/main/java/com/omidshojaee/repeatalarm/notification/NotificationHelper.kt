@@ -1,6 +1,7 @@
 package com.omidshojaee.repeatalarm.notification
 
 import android.app.NotificationChannel
+import android.app.Notification
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
@@ -8,7 +9,6 @@ import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.omidshojaee.repeatalarm.R
-import com.omidshojaee.repeatalarm.data.model.Alarm
 import com.omidshojaee.repeatalarm.ui.alarm.AlarmActivity
 
 object NotificationHelper {
@@ -33,38 +33,43 @@ object NotificationHelper {
         }
     }
 
-    fun showAlarmNotification(context: Context, alarm: Alarm) {
+    fun buildAlarmNotification(
+        context: Context,
+        alarmId: Long,
+        title: String,
+        soundUri: String?,
+        vibrate: Boolean
+    ): Notification {
         createNotificationChannel(context)
 
         val fullScreenIntent = Intent(context, AlarmActivity::class.java).apply {
-            putExtra(AlarmActivity.EXTRA_ALARM_ID, alarm.id)
-            putExtra(AlarmActivity.EXTRA_ALARM_TITLE, alarm.title)
-            putExtra(AlarmActivity.EXTRA_SOUND_URI, alarm.soundUri)
-            putExtra(AlarmActivity.EXTRA_VIBRATE, alarm.vibrate)
+            putExtra(AlarmActivity.EXTRA_ALARM_ID, alarmId)
+            putExtra(AlarmActivity.EXTRA_ALARM_TITLE, title)
+            putExtra(AlarmActivity.EXTRA_SOUND_URI, soundUri)
+            putExtra(AlarmActivity.EXTRA_VIBRATE, vibrate)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
         }
 
         val fullScreenPendingIntent = PendingIntent.getActivity(
             context,
-            alarm.id.toInt(),
+            alarmId.toInt(),
             fullScreenIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val notificationBuilder = NotificationCompat.Builder(context, CHANNEL_ID)
+        return NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle(alarm.title.ifBlank { context.getString(R.string.alarm_ringing_title) })
+            .setContentTitle(title.ifBlank { context.getString(R.string.alarm_ringing_title) })
             .setContentText(context.getString(R.string.alarm_triggered_tap))
+            .setContentIntent(fullScreenPendingIntent)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setFullScreenIntent(fullScreenPendingIntent, true)
             .setOngoing(true)
             .setAutoCancel(false)
-            .setVibrate(if (alarm.vibrate) longArrayOf(0, 500, 500, 500) else null)
+            .setVibrate(if (vibrate) longArrayOf(0, 500, 500, 500) else null)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-
-        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager.notify(alarm.id.toInt(), notificationBuilder.build())
+            .build()
     }
 
     fun cancelNotification(context: Context, alarmId: Long) {

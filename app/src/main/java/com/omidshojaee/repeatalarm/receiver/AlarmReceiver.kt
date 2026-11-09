@@ -5,11 +5,11 @@ import android.content.Context
 import android.content.Intent
 import android.os.PowerManager
 import android.util.Log
+import androidx.core.content.ContextCompat
 import com.omidshojaee.repeatalarm.data.local.AlarmDatabase
 import com.omidshojaee.repeatalarm.data.repository.AlarmRepositoryImpl
-import com.omidshojaee.repeatalarm.notification.NotificationHelper
 import com.omidshojaee.repeatalarm.scheduler.AlarmSchedulerImpl
-import com.omidshojaee.repeatalarm.ui.alarm.AlarmActivity
+import com.omidshojaee.repeatalarm.service.AlarmPlaybackService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -17,7 +17,8 @@ import kotlinx.coroutines.launch
 class AlarmReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != ACTION_ALARM_TRIGGER) return
+        val isSnooze = intent.action == ACTION_SNOOZE_TRIGGER
+        if (intent.action != ACTION_ALARM_TRIGGER && !isSnooze) return
 
         val alarmId = intent.getLongExtra(EXTRA_ALARM_ID, -1L)
         if (alarmId == -1L) {
@@ -44,22 +45,18 @@ class AlarmReceiver : BroadcastReceiver() {
 
                 val alarm = repository.getAlarmById(alarmId)
                 if (alarm != null && alarm.isEnabled) {
-                    // 1. Reschedule the next alarm if within end date limit
-                    val nextTriggerTime = repository.rescheduleAlarm(alarm)
-                    Log.d(TAG, "Rescheduled alarm $alarmId, next trigger time: $nextTriggerTime")
-
-                    // 2. Post high-priority notification with full-screen intent
-                    NotificationHelper.showAlarmNotification(context, alarm)
-
-                    // 3. Directly launch full screen AlarmActivity for immediate user response
-                    val alarmActivityIntent = Intent(context, AlarmActivity::class.java).apply {
-                        putExtra(AlarmActivity.EXTRA_ALARM_ID, alarm.id)
-                        putExtra(AlarmActivity.EXTRA_ALARM_TITLE, alarm.title)
-                        putExtra(AlarmActivity.EXTRA_SOUND_URI, alarm.soundUri)
-                        putExtra(AlarmActivity.EXTRA_VIBRATE, alarm.vibrate)
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    if (!isSnooze) {
+                        val nextTriggerTime = repository.rescheduleAlarm(alarm)
+                        Log.d(TAG, "Rescheduled alarm $alarmId, next trigger time: $nextTriggerTime")
                     }
-                    context.startActivity(alarmActivityIntent)
+
+                    val serviceIntent = Intent(context, AlarmPlaybackService::class.java).apply {
+                        putExtra(AlarmPlaybackService.EXTRA_ALARM_ID, alarm.id)
+                        putExtra(AlarmPlaybackService.EXTRA_ALARM_TITLE, alarm.title)
+                        putExtra(AlarmPlaybackService.EXTRA_SOUND_URI, alarm.soundUri)
+                        putExtra(AlarmPlaybackService.EXTRA_VIBRATE, alarm.vibrate)
+                    }
+                    ContextCompat.startForegroundService(context, serviceIntent)
                 } else {
                     Log.w(TAG, "Alarm $alarmId is null or disabled. Skipping ring.")
                 }
@@ -76,6 +73,7 @@ class AlarmReceiver : BroadcastReceiver() {
 
     companion object {
         const val ACTION_ALARM_TRIGGER = "com.omidshojaee.repeatalarm.ALARM_TRIGGER"
+        const val ACTION_SNOOZE_TRIGGER = "com.omidshojaee.repeatalarm.SNOOZE_TRIGGER"
         const val EXTRA_ALARM_ID = "extra_alarm_id"
         private const val TAG = "AlarmReceiver"
     }

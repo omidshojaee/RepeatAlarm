@@ -78,6 +78,45 @@ class AlarmSchedulerImpl(
         return nextTriggerTime
     }
 
+    fun scheduleSnooze(alarmId: Long, delayMillis: Long = SNOOZE_DELAY_MILLIS): Long {
+        val triggerAtMillis = System.currentTimeMillis() + delayMillis
+        val intent = Intent(context, AlarmReceiver::class.java).apply {
+            action = AlarmReceiver.ACTION_SNOOZE_TRIGGER
+            putExtra(AlarmReceiver.EXTRA_ALARM_ID, alarmId)
+        }
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            alarmId.toInt(),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        try {
+            if (canScheduleExactAlarms()) {
+                alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    triggerAtMillis,
+                    pendingIntent
+                )
+            } else {
+                alarmManager.setAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    triggerAtMillis,
+                    pendingIntent
+                )
+            }
+        } catch (e: SecurityException) {
+            Log.e(TAG, "Exact snooze scheduling denied for alarm $alarmId; using inexact alarm", e)
+            alarmManager.setAndAllowWhileIdle(
+                AlarmManager.RTC_WAKEUP,
+                triggerAtMillis,
+                pendingIntent
+            )
+        }
+
+        return triggerAtMillis
+    }
+
     override fun cancel(alarm: Alarm) {
         val intent = Intent(context, AlarmReceiver::class.java).apply {
             action = AlarmReceiver.ACTION_ALARM_TRIGGER
@@ -102,6 +141,7 @@ class AlarmSchedulerImpl(
     }
 
     companion object {
+        private const val SNOOZE_DELAY_MILLIS = 10 * 60 * 1000L
         private const val TAG = "AlarmSchedulerImpl"
     }
 }

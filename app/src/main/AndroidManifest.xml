@@ -10,6 +10,8 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
 
     <application
         android:allowBackup="true"
@@ -40,6 +42,11 @@
             android:turnScreenOn="true"
             android:excludeFromRecents="true"
             android:theme="@style/Theme.RepeatAlarm" />
+
+        <service
+            android:name="com.omidshojaee.repeatalarm.service.AlarmPlaybackService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
 
         <receiver
             android:name="com.omidshojaee.repeatalarm.receiver.AlarmReceiver"
